@@ -144,6 +144,7 @@ async def compile_endpoint(
 async def session_compile(
     file: UploadFile = File(...),
     namespace: str = Form(""),
+    encoding: str = Form("uper"),
 ):
     """
     Compile schema + build encode/decode harness.
@@ -152,9 +153,11 @@ async def session_compile(
     """
     if not ASN1_COMPILER.exists():
         raise HTTPException(status_code=503, detail="Compiler binary not found.")
+    if encoding not in ("uper", "aper"):
+        encoding = "uper"
 
     schema_bytes = await file.read()
-    sid = schema_hash(schema_bytes)
+    sid = schema_hash(schema_bytes + encoding.encode())
 
     # Return in-memory session if already built this run.
     if sid in _sessions:
@@ -178,7 +181,7 @@ async def session_compile(
         input_path = workdir / "input.asn1"
         input_path.write_bytes(schema_bytes)
 
-        result = compile_schema(workdir, input_path, lang="cpp", namespace=namespace)
+        result = compile_schema(workdir, input_path, lang="cpp", namespace=namespace, encoding=encoding)
         if "error" in result:
             shutil.rmtree(workdir, ignore_errors=True)
             return JSONResponse(status_code=422, content={"error": result["error"]})

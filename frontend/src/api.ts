@@ -16,9 +16,10 @@ export const api = {
     if (response.ok) return response.blob();
     return response.json();
   },
-  async sessionCompile(file: File) {
+  async sessionCompile(file: File, encoding?: string) {
     let formData = new FormData();
     formData.append(`file`, file);
+    if (encoding) formData.append(`encoding`, encoding);
 
     const response = await fetch(`/api/session/compile`, {
       method: `POST`,

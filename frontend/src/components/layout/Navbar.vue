@@ -47,7 +47,17 @@ onUnmounted(() => {
     </div>
 
     <div class="flex items-center gap-2">
-      <button 
+      <select
+        v-model="asnStore.encoding"
+        :disabled="asnStore.isCompiling"
+        class="px-2 py-1.5 rounded text-sm font-mono bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer disabled:opacity-50"
+        title="Encoding rules"
+      >
+        <option value="uper">UPER</option>
+        <option value="aper">APER</option>
+      </select>
+
+      <button
         @click="triggerUpload"
         :disabled="asnStore.isCompiling"
         class="flex items-center gap-2 px-3 py-1.5 rounded text-sm font-bold transition-all shadow-sm"

@@ -88,14 +88,15 @@ def iter_cached_sessions() -> list[tuple[str, dict]]:
 
 
 def compile_schema(workdir: Path, schema_path: Path, lang: str = "cpp",
-                   namespace: str = "") -> dict:
+                   namespace: str = "", encoding: str = "uper") -> dict:
     """
     Run asn1_compiler on the schema.  Returns {"ok": True} or {"error": "..."}.
     Writes generated.h, generated.cpp, generated_json.hpp, generated_schema.json.
     """
     out_prefix = workdir / "generated"
     cmd = [str(ASN1_COMPILER), str(schema_path),
-           "-o", str(out_prefix), "--lang", lang, "--json", "--schema"]
+           "-o", str(out_prefix), "--lang", lang, "--json", "--schema",
+           "--encoding", encoding]
     if namespace and lang == "cpp":
         cmd += ["--namespace", namespace]
 

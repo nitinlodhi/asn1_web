@@ -16,8 +16,12 @@ export const useAsnStore = defineStore('asn', {
     isEncoding: false,
     isDecoding: false,
     error: null as string | null,
+    encoding: 'uper' as string,
   }),
   actions: {
+    setEncoding(enc: string) {
+      this.encoding = enc
+    },
     async compileSchema(file: File) {
       this.isCompiling = true
       this.error = null
@@ -26,7 +30,7 @@ export const useAsnStore = defineStore('asn', {
       this.encodedHex = ''
       this.decodedData = null
       try {
-        const res = await api.sessionCompile(file)
+        const res = await api.sessionCompile(file, this.encoding)
         if (res.error) {
           this.error = res.error
         } else {
