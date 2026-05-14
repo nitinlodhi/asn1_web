@@ -56,24 +56,24 @@ export const useAsnStore = defineStore('asn', {
         this.encoding = 'aper'
         this.isEncodingAutoDetected = true
       } else if (
-        filename.includes('ngap') || 
-        filename.includes('s1ap') || 
-        filename.includes('e1ap') || 
-        filename.includes('f1ap') || 
-        filename.includes('x2ap') || 
         filename.includes('rrc')
       ) {
-        // Modern 3GPP protocols use UPER
+        // RRC protocols use UPER (packed, no byte alignment)
         this.encoding = 'uper'
         this.isEncodingAutoDetected = true
       } else if (
-        filename.includes('ranap') || 
-        filename.includes('nbap') || 
-        filename.includes('rnsap') || 
+        filename.includes('ngap') ||
+        filename.includes('s1ap') ||
+        filename.includes('e1ap') ||
+        filename.includes('f1ap') ||
+        filename.includes('x2ap') ||
+        filename.includes('ranap') ||
+        filename.includes('nbap') ||
+        filename.includes('rnsap') ||
         filename.includes('sabp') ||
         filename.includes('hnbap')
       ) {
-        // Older 3GPP/RAN protocols use APER
+        // AP-layer 3GPP protocols use APER (byte-aligned)
         this.encoding = 'aper'
         this.isEncodingAutoDetected = true
       }

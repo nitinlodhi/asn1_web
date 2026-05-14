@@ -208,7 +208,6 @@ async def session_compile(
                 
                 # Map to full names
                 content = content.replace('AperInteger::', 'asn1::runtime::AperInteger::')
-                content = content.replace('UperInteger::', 'asn1::runtime::AperInteger::')
                 
                 # 2. Add alignment for Open Types and Lengths (Critical for 3GPP protocols)
                 # We force alignment before ALL Length and OpenType calls to match Wireshark/Online tool behavior
