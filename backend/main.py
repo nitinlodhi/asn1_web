@@ -195,69 +195,14 @@ async def session_compile(
             # For E1AP (UPER requested but it's actually APER-style), 
             # we must use AperInteger for alignment.
             if encoding == "uper":
-                import re
                 # Ensure correct runtime headers are included
                 if '#include "runtime/aper/AperInteger.h"' not in content:
                     content = '#include "runtime/aper/AperInteger.h"\n' + content
                 if '#include "runtime/uper/UperExtension.h"' not in content:
                     content = '#include "runtime/uper/UperExtension.h"\n' + content
-                
-                # Replace helpers
-                content = content.replace('AperInteger::decodeConstrainedIntExt', 'uper_decode_constrained_int_ext')
-                content = content.replace('AperInteger::encodeConstrainedIntExt', 'uper_encode_constrained_int_ext')
-                
-                # Map to full names
+
+                # Qualify AperInteger namespace (compiler may emit unqualified calls)
                 content = content.replace('AperInteger::', 'asn1::runtime::AperInteger::')
-                
-                # 2. Add alignment for Open Types and Lengths (Critical for 3GPP protocols)
-                # We force alignment before ALL Length and OpenType calls to match Wireshark/Online tool behavior
-                
-                # OpenType Decode
-                content = content.replace('UperExtension::decodeOpenType(reader)', 
-                                          '([](asn1::runtime::BitReader& r){ r.alignToOctet(); return asn1::runtime::UperExtension::decodeOpenType(r); }(reader))')
-                
-                # OpenType Encode
-                content = re.sub(r'UperExtension::encodeOpenType\(writer,\s*(.*?)\);',
-                                 r'{ writer.alignToOctet(); asn1::runtime::UperExtension::encodeOpenType(writer, \1); }',
-                                 content)
-
-                # Length Decode (Constrained)
-                content = re.sub(r'UperLength::decodeLength\(reader,\s*(.*?),\s*(.*?)\)',
-                                 r'([](asn1::runtime::BitReader& r, size_t min, size_t max){ r.alignToOctet(); return asn1::runtime::UperLength::decodeLength(r, min, max); }(reader, \1, \2))',
-                                 content)
-                
-                # Length Encode (Constrained)
-                content = re.sub(r'UperLength::encodeLength\(writer,\s*(.*?),\s*(.*?),\s*(.*?)\)',
-                                 r'([](asn1::runtime::BitWriter& w, size_t l, size_t min, size_t max){ w.alignToOctet(); asn1::runtime::UperLength::encodeLength(w, l, min, max); })(writer, \1, \2, \3)',
-                                 content)
-
-                # Length Decode (Unconstrained)
-                content = content.replace('UperLength::decodeUnconstrainedLength(reader)',
-                                          '([](asn1::runtime::BitReader& r){ r.alignToOctet(); return asn1::runtime::UperLength::decodeUnconstrainedLength(r); }(reader))')
-                
-                # Length Encode (Unconstrained)
-                content = re.sub(r'UperLength::encodeUnconstrainedLength\(writer,\s*(.*?)\)',
-                                 r'([](asn1::runtime::BitWriter& w, size_t l){ w.alignToOctet(); asn1::runtime::UperLength::encodeUnconstrainedLength(w, l); })(writer, \1)',
-                                 content)
-
-                helper_code = """
-namespace {
-    int64_t uper_decode_constrained_int_ext(asn1::runtime::BitReader& reader, int64_t min, int64_t max, bool& isExt) {
-        isExt = asn1::runtime::UperExtension::decodeExtensionMarker(reader);
-        if (!isExt) return asn1::runtime::AperInteger::decodeConstrainedInt(reader, min, max);
-        return 0;
-    }
-    void uper_encode_constrained_int_ext(asn1::runtime::BitWriter& writer, int64_t value, int64_t min, int64_t max) {
-        asn1::runtime::UperExtension::encodeExtensionMarker(writer, false);
-        asn1::runtime::AperInteger::encodeConstrainedInt(writer, value, min, max);
-    }
-}
-"""
-                # Insert helpers after includes
-                pos = content.find('\n//')
-                if pos == -1: pos = content.find('\nnamespace')
-                if pos != -1:
-                    content = content[:pos] + helper_code + content[pos:]
             
             generated_cpp.write_text(content)
 
