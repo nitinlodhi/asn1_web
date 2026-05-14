@@ -186,6 +186,89 @@ async def session_compile(
             shutil.rmtree(workdir, ignore_errors=True)
             return JSONResponse(status_code=422, content={"error": result["error"]})
 
+        # Apply hacks to fix compiler-side issues
+        generated_cpp = workdir / "generated.cpp"
+        if generated_cpp.exists():
+            content = generated_cpp.read_text()
+            
+            # 1. Map AperInteger to UperInteger or vice versa based on encoding.
+            # For E1AP (UPER requested but it's actually APER-style), 
+            # we must use AperInteger for alignment.
+            if encoding == "uper":
+                import re
+                # Ensure correct runtime headers are included
+                if '#include "runtime/aper/AperInteger.h"' not in content:
+                    content = '#include "runtime/aper/AperInteger.h"\n' + content
+                if '#include "runtime/uper/UperExtension.h"' not in content:
+                    content = '#include "runtime/uper/UperExtension.h"\n' + content
+                
+                # Replace helpers
+                content = content.replace('AperInteger::decodeConstrainedIntExt', 'uper_decode_constrained_int_ext')
+                content = content.replace('AperInteger::encodeConstrainedIntExt', 'uper_encode_constrained_int_ext')
+                
+                # Map to full names
+                content = content.replace('AperInteger::', 'asn1::runtime::AperInteger::')
+                content = content.replace('UperInteger::', 'asn1::runtime::AperInteger::')
+                
+                # 2. Add alignment for Open Types and Lengths (Critical for 3GPP protocols)
+                # We force alignment before ALL Length and OpenType calls to match Wireshark/Online tool behavior
+                
+                # OpenType Decode
+                content = content.replace('UperExtension::decodeOpenType(reader)', 
+                                          '([](asn1::runtime::BitReader& r){ r.alignToOctet(); return asn1::runtime::UperExtension::decodeOpenType(r); }(reader))')
+                
+                # OpenType Encode
+                content = re.sub(r'UperExtension::encodeOpenType\(writer,\s*(.*?)\);',
+                                 r'{ writer.alignToOctet(); asn1::runtime::UperExtension::encodeOpenType(writer, \1); }',
+                                 content)
+
+                # Length Decode (Constrained)
+                content = re.sub(r'UperLength::decodeLength\(reader,\s*(.*?),\s*(.*?)\)',
+                                 r'([](asn1::runtime::BitReader& r, size_t min, size_t max){ r.alignToOctet(); return asn1::runtime::UperLength::decodeLength(r, min, max); }(reader, \1, \2))',
+                                 content)
+                
+                # Length Encode (Constrained)
+                content = re.sub(r'UperLength::encodeLength\(writer,\s*(.*?),\s*(.*?),\s*(.*?)\)',
+                                 r'([](asn1::runtime::BitWriter& w, size_t l, size_t min, size_t max){ w.alignToOctet(); asn1::runtime::UperLength::encodeLength(w, l, min, max); })(writer, \1, \2, \3)',
+                                 content)
+
+                # Length Decode (Unconstrained)
+                content = content.replace('UperLength::decodeUnconstrainedLength(reader)',
+                                          '([](asn1::runtime::BitReader& r){ r.alignToOctet(); return asn1::runtime::UperLength::decodeUnconstrainedLength(r); }(reader))')
+                
+                # Length Encode (Unconstrained)
+                content = re.sub(r'UperLength::encodeUnconstrainedLength\(writer,\s*(.*?)\)',
+                                 r'([](asn1::runtime::BitWriter& w, size_t l){ w.alignToOctet(); asn1::runtime::UperLength::encodeUnconstrainedLength(w, l); })(writer, \1)',
+                                 content)
+
+                helper_code = """
+namespace {
+    int64_t uper_decode_constrained_int_ext(asn1::runtime::BitReader& reader, int64_t min, int64_t max, bool& isExt) {
+        isExt = asn1::runtime::UperExtension::decodeExtensionMarker(reader);
+        if (!isExt) return asn1::runtime::AperInteger::decodeConstrainedInt(reader, min, max);
+        return 0;
+    }
+    void uper_encode_constrained_int_ext(asn1::runtime::BitWriter& writer, int64_t value, int64_t min, int64_t max) {
+        asn1::runtime::UperExtension::encodeExtensionMarker(writer, false);
+        asn1::runtime::AperInteger::encodeConstrainedInt(writer, value, min, max);
+    }
+}
+"""
+                # Insert helpers after includes
+                pos = content.find('\n//')
+                if pos == -1: pos = content.find('\nnamespace')
+                if pos != -1:
+                    content = content[:pos] + helper_code + content[pos:]
+            
+            generated_cpp.write_text(content)
+
+        generated_hpp = workdir / "generated_json.hpp"
+        if generated_hpp.exists():
+            content = generated_hpp.read_text()
+            # Map mangled keywords back to their original names for JSON compatibility
+            content = content.replace('"true_"', '"true"').replace('"false_"', '"false"')
+            generated_hpp.write_text(content)
+
         harness_result = build_harness(workdir)
         if "error" in harness_result:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -273,7 +356,9 @@ def decode_endpoint(req: DecodeRequest):
 
     try:
         result = run_decode(harness_bin, req.type_name, req.hex_data)
+        print(f"DEBUG: decode {req.type_name} result: {str(result)[:200]}...")
     except Exception as e:
+        print(f"DEBUG: decode {req.type_name} error: {e}")
         return JSONResponse(status_code=500, content={"error": f"Decode runtime error: {str(e)}"})
 
     if "error" in result:

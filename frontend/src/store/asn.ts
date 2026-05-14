@@ -17,7 +17,23 @@ export const useAsnStore = defineStore('asn', {
     isDecoding: false,
     error: null as string | null,
     encoding: 'uper' as string,
+    isEncodingAutoDetected: false,
   }),
+  getters: {
+    messageTypes(state): string[] {
+      return state.types.filter(t => {
+        const lower = t.toLowerCase()
+        // Heuristic for top-level messages in 3GPP protocols
+        return lower.endsWith('request') || 
+               lower.endsWith('response') || 
+               lower.endsWith('failure') || 
+               lower.endsWith('command') || 
+               lower.endsWith('indication') ||
+               lower.endsWith('pdu') ||
+               t.includes('::') // Likely a fully qualified type
+      })
+    }
+  },
   actions: {
     setEncoding(enc: string) {
       this.encoding = enc
@@ -29,6 +45,39 @@ export const useAsnStore = defineStore('asn', {
       this.messageData = {}
       this.encodedHex = ''
       this.decodedData = null
+      this.isEncodingAutoDetected = false
+
+      // 1. Auto-detect encoding based on filename hints or standard protocol names
+      const filename = file.name.toLowerCase()
+      if (filename.includes('uper')) {
+        this.encoding = 'uper'
+        this.isEncodingAutoDetected = true
+      } else if (filename.includes('aper')) {
+        this.encoding = 'aper'
+        this.isEncodingAutoDetected = true
+      } else if (
+        filename.includes('ngap') || 
+        filename.includes('s1ap') || 
+        filename.includes('e1ap') || 
+        filename.includes('f1ap') || 
+        filename.includes('x2ap') || 
+        filename.includes('rrc')
+      ) {
+        // Modern 3GPP protocols use UPER
+        this.encoding = 'uper'
+        this.isEncodingAutoDetected = true
+      } else if (
+        filename.includes('ranap') || 
+        filename.includes('nbap') || 
+        filename.includes('rnsap') || 
+        filename.includes('sabp') ||
+        filename.includes('hnbap')
+      ) {
+        // Older 3GPP/RAN protocols use APER
+        this.encoding = 'aper'
+        this.isEncodingAutoDetected = true
+      }
+
       try {
         const res = await api.sessionCompile(file, this.encoding)
         if (res.error) {
@@ -38,6 +87,34 @@ export const useAsnStore = defineStore('asn', {
           this.types = res.types
           this.schema = res.schema
           this.indexedSchema = processSchema(res.schema) || {}
+
+          // Auto-select likely top-level PDU
+          if (this.types.length > 0) {
+            const pduCandidate = this.types.find(t => {
+              const lower = t.toLowerCase()
+              return lower.endsWith('::e1ap_pdu') || 
+                     lower.endsWith('::ngap_pdu') ||
+                     lower.endsWith('::s1ap_pdu') ||
+                     lower.endsWith('::x2ap_pdu') ||
+                     lower.endsWith('::f1ap_pdu') ||
+                     lower.endsWith('pdu')
+            })
+            
+            // Refine encoding based on detected types if not already determined
+            const allTypesString = this.types.join(' ').toLowerCase()
+            // Modern APs (NGAP, E1AP, etc.) already defaulted to UPER above.
+            // But we can check content as a fallback.
+            if (!filename.includes('aper') && !filename.includes('uper')) {
+                if (allTypesString.includes('ranap') || allTypesString.includes('nbap')) {
+                    this.encoding = 'aper'
+                    this.isEncodingAutoDetected = true
+                }
+            }
+
+            if (pduCandidate) {
+              this.selectType(pduCandidate)
+            }
+          }
         }
       } catch (e: any) {
         this.error = e.message || 'Compilation failed'
@@ -162,6 +239,15 @@ export const useAsnStore = defineStore('asn', {
       }
 
       return data
+    },
+    async decodeHex(typeName: string, hex: string) {
+      if (!this.sessionId) return null
+      try {
+        return await api.decode(this.sessionId, typeName, hex)
+      } catch (e) {
+        console.error('Sub-decode failed:', e)
+        return null
+      }
     },
     async encodeMessage() {
       if (!this.sessionId || !this.selectedType) return

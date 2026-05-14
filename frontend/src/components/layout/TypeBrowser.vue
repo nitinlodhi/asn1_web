@@ -5,17 +5,28 @@ import { ref, computed } from 'vue'
 
 const asnStore = useAsnStore()
 const filter = ref('')
+const showAll = ref(false)
 
 const filteredTypes = computed(() => {
-  if (!filter.value) return asnStore.types
-  return asnStore.types.filter((t: string) => t.toLowerCase().includes(filter.value.toLowerCase()))
+  const baseList = (showAll.value ? asnStore.types : asnStore.messageTypes) || []
+  // Exclude internal containers that are usually not used directly
+  const filtered = baseList.filter(t => !t.includes('ProtocolIE-Field') && !t.includes('ProtocolExtensionField') && !t.includes('PrivateIE-Field'))
+  
+  if (!filter.value) return filtered
+  return filtered.filter((t: string) => t.toLowerCase().includes(filter.value.toLowerCase()))
 })
 </script>
 
 <template>
   <div class="h-full flex flex-col">
     <div class="p-3 border-b bg-slate-50">
-      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">ASN.1 Types</h2>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">ASN.1 Types</h2>
+        <label class="flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" v-model="showAll" class="w-3 h-3" />
+          <span class="text-[10px] text-slate-400">Show All</span>
+        </label>
+      </div>
       <div class="relative">
         <Search class="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
         <input 

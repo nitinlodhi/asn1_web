@@ -53,16 +53,36 @@ export function lookupType(name: string, indexedSchema: Record<string, any>) {
 
 export function resolveFullType(schema: any, indexedSchema: Record<string, any>): any {
   if (!schema) return null;
-  let current = schema;
+  let current = { ...schema };
   let depth = 0;
   const MAX_DEPTH = 10;
+  const seen = new Set<string>();
 
+  // If the initial schema is just a reference, start by resolving it
   while (current.type_ref && depth < MAX_DEPTH) {
+    if (seen.has(current.type_ref)) break;
+    seen.add(current.type_ref);
+
     const resolved = lookupType(current.type_ref, indexedSchema);
     if (!resolved) break;
-    // Merge properties (preserve field-level overrides like 'ies' or 'default')
-    current = { ...resolved, ...current };
-    if (current.kind && current.kind !== 'unknown') break;
+    
+    // Merge: resolved type's properties are base, current's properties override them.
+    // However, we don't want placeholder 'kind' values to override concrete ones.
+    const { type_ref: _consumed, ...overrides } = current;
+    const base = { ...resolved };
+    
+    // If the override has a placeholder kind, don't use it to overwrite a concrete base kind
+    const placeholderKinds = ['alias', 'any', 'unknown', ''];
+    if (overrides.kind && placeholderKinds.includes(overrides.kind) && base.kind && !placeholderKinds.includes(base.kind)) {
+       delete overrides.kind;
+    }
+
+    current = { ...base, ...overrides };
+    
+    // Continue resolving if the merged result is still just an alias or unknown
+    if (current.kind && current.kind !== 'unknown' && current.kind !== 'any' && current.kind !== 'alias') {
+       break;
+    }
     depth++;
   }
   return current;

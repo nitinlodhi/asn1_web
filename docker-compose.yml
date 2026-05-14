@@ -1,0 +1,13 @@
+services:
+  asn1-web:
+    build:
+      context: ..
+      dockerfile: asn1_web/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - asn1_cache:/root/.asn1_web/cache
+    restart: unless-stopped
+
+volumes:
+  asn1_cache:

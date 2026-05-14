@@ -55,8 +55,8 @@ const toggleDropdown = async () => {
       dropdownStyle.value = {
         position: 'fixed',
         bottom: `${window.innerHeight - rect.top + 4}px`,
-        left: `${rect.right - 256}px`,
-        width: '256px',
+        right: `${window.innerWidth - rect.right}px`,
+        width: '400px',
         zIndex: 9999
       }
     }
@@ -93,7 +93,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
           <button 
             ref="triggerButton"
             @click.stop="toggleDropdown"
-            class="flex items-center gap-2 px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-mono hover:border-wireshark-blue transition-colors max-w-[150px]"
+            class="flex items-center gap-2 px-2 py-1 bg-white border border-slate-200 rounded text-[10px] font-mono hover:border-wireshark-blue transition-colors max-w-[300px]"
           >
             <span class="truncate">{{ asnStore.selectedType || 'Select Type...' }}</span>
             <ChevronDown class="w-3 h-3 text-slate-400" />

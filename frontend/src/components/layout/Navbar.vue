@@ -47,15 +47,21 @@ onUnmounted(() => {
     </div>
 
     <div class="flex items-center gap-2">
-      <select
-        v-model="asnStore.encoding"
-        :disabled="asnStore.isCompiling"
-        class="px-2 py-1.5 rounded text-sm font-mono bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer disabled:opacity-50"
-        title="Encoding rules"
-      >
-        <option value="uper">UPER</option>
-        <option value="aper">APER</option>
-      </select>
+      <div v-if="asnStore.sessionId" class="relative flex items-center">
+        <select
+          v-model="asnStore.encoding"
+          :disabled="asnStore.isCompiling || asnStore.isEncodingAutoDetected"
+          class="px-2 py-1.5 rounded text-sm font-mono bg-white/10 hover:bg-white/20 text-white border border-white/20 cursor-pointer disabled:opacity-50 appearance-none pr-8"
+          :title="asnStore.isEncodingAutoDetected ? `Auto-detected based on protocol: ${asnStore.encoding.toUpperCase()}` : 'Select encoding rules'"
+        >
+          <option value="uper" class="bg-slate-800 text-white">UPER</option>
+          <option value="aper" class="bg-slate-800 text-white">APER</option>
+        </select>
+        <div class="absolute right-2 pointer-events-none opacity-50">
+          <svg v-if="asnStore.isEncodingAutoDetected" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
 
       <button
         @click="triggerUpload"
